@@ -107,6 +107,11 @@ func (s *Server) HandleGetGuildChannels(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !s.isGuildAdmin(r.Context().Value(UserIDKey).(string), guildID) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	channels, err := s.Session.GuildChannels(guildID)
 	if err != nil {
 		http.Error(w, "Failed to fetch channels", http.StatusInternalServerError)
@@ -131,6 +136,11 @@ func (s *Server) HandleGetGuildMembers(w http.ResponseWriter, r *http.Request) {
 	guildID := r.URL.Query().Get("guild_id")
 	if guildID == "" {
 		http.Error(w, "Missing guild_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	if !s.isGuildAdmin(r.Context().Value(UserIDKey).(string), guildID) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 

@@ -12,6 +12,11 @@ func (s *Server) HandleGetGuildRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.isGuildAdmin(r.Context().Value(UserIDKey).(string), guildID) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	roles, err := s.Session.GuildRoles(guildID)
 	if err != nil {
 		http.Error(w, "Failed to fetch roles from Discord", http.StatusInternalServerError)

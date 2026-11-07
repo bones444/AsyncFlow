@@ -195,6 +195,11 @@ func (s *Server) HandleCreateWebPoll(w http.ResponseWriter, r *http.Request) {
 
 	managerID := r.Context().Value(UserIDKey).(string)
 
+	if !s.isGuildAdmin(managerID, payload.GuildID) {
+		http.Error(w, "Only server admins can create polls", http.StatusForbidden)
+		return
+	}
+
 	_, err := s.PollService.CreatePoll(
 		payload.GuildID,
 		payload.ChannelID,

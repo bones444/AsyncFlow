@@ -165,6 +165,11 @@ func (s *Server) HandleCreateStandup(w http.ResponseWriter, r *http.Request) {
 
 	managerID := r.Context().Value(UserIDKey).(string)
 
+	if !s.isGuildAdmin(managerID, payload.GuildID) {
+		sendJSONError(w, http.StatusForbidden, "Only server admins can create standups")
+		return
+	}
+
 	standup := models.Standup{
 		Name:            payload.Name,
 		Time:            payload.Time,
@@ -266,6 +271,16 @@ func (s *Server) HandleDeleteStandup(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetStandupHistory(w http.ResponseWriter, r *http.Request) {
 	standupIDStr := r.URL.Query().Get("standup_id")
 	standupID, _ := strconv.ParseUint(standupIDStr, 10, 32)
+
+	var standupRec models.Standup
+	if err := s.DB.First(&standupRec, standupID).Error; err != nil {
+		http.Error(w, "Standup not found", http.StatusNotFound)
+		return
+	}
+	if !s.canManageStandup(r.Context().Value(UserIDKey).(string), standupRec) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
@@ -371,6 +386,16 @@ func (s *Server) HandleAddStandupMember(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var target models.Standup
+	if err := s.DB.First(&target, reqBody.StandupID).Error; err != nil {
+		http.Error(w, "Standup not found", http.StatusNotFound)
+		return
+	}
+	if !s.canManageStandup(r.Context().Value(UserIDKey).(string), target) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	if err := s.StandupService.AddMemberToStandup(reqBody.UserID, reqBody.StandupID); err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -395,6 +420,16 @@ func (s *Server) HandleRemoveStandupMember(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	var target models.Standup
+	if err := s.DB.First(&target, reqBody.StandupID).Error; err != nil {
+		http.Error(w, "Standup not found", http.StatusNotFound)
+		return
+	}
+	if !s.canManageStandup(r.Context().Value(UserIDKey).(string), target) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	if err := s.StandupService.RemoveMemberFromStandup(reqBody.UserID, reqBody.StandupID); err != nil {
 		http.Error(w, "Failed to remove member", http.StatusInternalServerError)
 		return
@@ -414,6 +449,10 @@ func (s *Server) HandleGetStandup(w http.ResponseWriter, r *http.Request) {
 	var standup models.Standup
 	if err := s.DB.Preload("Participants").First(&standup, standupID).Error; err != nil {
 		http.Error(w, "Standup not found", http.StatusNotFound)
+		return
+	}
+	if !s.canManageStandup(r.Context().Value(UserIDKey).(string), standup) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
