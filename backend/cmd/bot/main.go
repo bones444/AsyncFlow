@@ -18,6 +18,11 @@ import (
 func main() {
 	_ = godotenv.Load()
 
+	// Empty secret would make JWTs signable with an empty key.
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("❌ JWT_SECRET is not set")
+	}
+
 	db, err := database.InitDB()
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to Database: %v", err)
