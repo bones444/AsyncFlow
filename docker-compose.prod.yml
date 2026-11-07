@@ -10,6 +10,9 @@ services:
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/asyncflow?sslmode=disable
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    # API on loopback only: reach it through an SSH tunnel until a domain and TLS proxy exist.
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       - db
       - redis
