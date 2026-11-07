@@ -77,7 +77,11 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			userID := claims["user_id"].(string)
+			userID, ok := claims["user_id"].(string)
+			if !ok {
+				http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+				return
+			}
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			next(w, r.WithContext(ctx))
 		} else {
