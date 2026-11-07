@@ -25,9 +25,11 @@ export function useLiveDashboard(refetchStandups, refetchPolls) {
     let isIntentionallyClosing = false;
 
     const connectWebSocket = () => {
-      ws = new WebSocket(`${wsBase}ws?token=${token}`);
+      ws = new WebSocket(`${wsBase}ws`);
 
       ws.onopen = () => {
+        // Server expects the token as the first message (not in the URL).
+        ws.send(JSON.stringify({ type: "auth", token }));
         setIsLive(true);
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
