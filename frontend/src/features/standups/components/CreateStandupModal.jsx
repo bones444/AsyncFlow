@@ -170,6 +170,8 @@ export default function CreateStandupModal({ isOpen, onClose }) {
     setCurrentStep((prev) => Math.min(prev + 1, 3));
   };
 
+  const handleBack = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
+
   const handleSubmit = async () => {
     const cleanedQuestions = formData.questions
       .map((q) => q.trim())
