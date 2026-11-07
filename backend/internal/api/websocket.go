@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -92,25 +94,40 @@ func (h *Hub) Run() {
 	}
 }
 
-func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.URL.Query().Get("token")
-	if tokenStr == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+// authenticateWS waits for the first message {"type":"auth","token":"..."}.
+// The token is not read from the URL: query strings end up in proxy and access logs.
+func authenticateWS(conn *websocket.Conn) bool {
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	defer conn.SetReadDeadline(time.Time{})
 
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		return false
+	}
+	var msg struct {
+		Type  string `json:"type"`
+		Token string `json:"token"`
+	}
+	if json.Unmarshal(data, &msg) != nil || msg.Type != "auth" || msg.Token == "" {
+		return false
+	}
+	token, err := jwt.Parse(msg.Token, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
+	return err == nil && token.Valid
+}
 
-	if err != nil || !token.Valid {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
+func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("WebSocket Upgrade Error:", err)
+		return
+	}
+
+	if !authenticateWS(conn) {
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "unauthorized"))
+		conn.Close()
 		return
 	}
 
@@ -121,7 +138,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		defer conn.Close()
 		for message := range client.Send {
 			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				return 
+				return
 			}
 		}
 	}()
