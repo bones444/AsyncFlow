@@ -10,7 +10,8 @@ import (
 )
 
 func (h *PollHandler) handleCreateNativePoll(session *discordgo.Session, intr *discordgo.InteractionCreate) {
-    userID := intr.Member.User.ID
+    // intr.Member is nil in DMs; the shared helper falls back to intr.User.
+    userID := utils.ExtractUserID(intr)
     options := intr.ApplicationCommandData().Options
 
     optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
