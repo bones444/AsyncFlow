@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/time/rate"
@@ -15,20 +16,43 @@ import (
 type contextKey string
 const UserIDKey contextKey = "user_id"
 
-var clients = make(map[string]*rate.Limiter)
+type visitor struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+var clients = make(map[string]*visitor)
 var mu sync.Mutex
+
+const visitorTTL = 10 * time.Minute
+
+func init() {
+	// shortcut: sweep is a full-map scan once a minute, fine for a small bot; a per-IP timer would be needed at large scale.
+	go func() {
+		for range time.Tick(time.Minute) {
+			mu.Lock()
+			for ip, v := range clients {
+				if time.Since(v.lastSeen) > visitorTTL {
+					delete(clients, ip)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+}
 
 func getVisitor(ip string) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 
-	limiter, exists := clients[ip]
+	v, exists := clients[ip]
 	if !exists {
-		limiter = rate.NewLimiter(5, 10)
-		clients[ip] = limiter
+		v = &visitor{limiter: rate.NewLimiter(5, 10)}
+		clients[ip] = v
 	}
+	v.lastSeen = time.Now()
 
-	return limiter
+	return v.limiter
 }
 
 func RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
