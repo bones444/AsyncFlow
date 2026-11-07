@@ -118,7 +118,7 @@ AsyncFlow helps teams stay aligned while keeping communication
 
 Install:
 
--   Go 1.20+
+-   Go 1.25+
 -   Node 18+
 -   Redis
 -   PostgreSQL / MySQL
