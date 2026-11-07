@@ -4,16 +4,41 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
+// allowedOrigins reads ALLOWED_ORIGINS (comma-separated), falling back to FRONTEND_URL.
+func allowedOrigins() []string {
+	raw := os.Getenv("ALLOWED_ORIGINS")
+	if raw == "" {
+		raw = os.Getenv("FRONTEND_URL")
+	}
+	var out []string
+	for _, o := range strings.Split(raw, ",") {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// originAllowed: requests without an Origin header come from non-browser
+// clients and still need a valid token. Browser origins must be listed.
+func originAllowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
 		return true
-	},
+	}
+	return slices.Contains(allowedOrigins(), origin)
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: originAllowed,
 }
 
 type Client struct {
