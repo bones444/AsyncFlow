@@ -10,11 +10,6 @@ import (
 )
 
 func (h *PollHandler) handleCreateNativePoll(session *discordgo.Session, intr *discordgo.InteractionCreate) {
-    // Same rule as the web endpoint: only server admins create polls.
-    if !utils.IsServerAdmin(intr) {
-        utils.RespondWithMessage(session, intr, "⛔ Only server admins can create polls.", true)
-        return
-    }
     // intr.Member is nil in DMs; the shared helper falls back to intr.User.
     userID := utils.ExtractUserID(intr)
     options := intr.ApplicationCommandData().Options
