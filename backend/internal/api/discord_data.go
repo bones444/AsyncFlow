@@ -48,24 +48,14 @@ func (s *Server) HandleGetUserGuilds(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(string)
 
 	var user models.UserProfile
-	if err := s.DB.Where("user_id = ?", userID).First(&user).Error; err != nil || user.DiscordToken == "" {
-		http.Error(w, "User token not found", http.StatusUnauthorized)
+	if err := s.DB.Where("user_id = ?", userID).First(&user).Error; err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
 
-	req, _ := http.NewRequest("GET", "https://discord.com/api/v10/users/@me/guilds", nil)
-	req.Header.Set("Authorization", "Bearer "+user.DiscordToken)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != 200 {
-		http.Error(w, "Failed to fetch user guilds", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
+	// Guild list was saved at login; the Discord token is no longer kept.
 	var userGuilds []UserGuild
-	json.NewDecoder(resp.Body).Decode(&userGuilds)
+	json.Unmarshal([]byte(user.GuildsJSON), &userGuilds)
 
 	responseList := make([]GuildDTO, 0)
 	botGuilds := make(map[string]bool)

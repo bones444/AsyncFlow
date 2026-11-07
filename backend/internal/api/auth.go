@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,6 +25,29 @@ type DiscordUser struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 	Avatar   string `json:"avatar"`
+}
+
+// fetchUserGuilds returns the user's guild list as raw JSON, using the OAuth token once.
+// On failure it returns "[]": the user can log in again later to refresh the list.
+func fetchUserGuilds(accessToken string) string {
+	req, _ := http.NewRequest("GET", "https://discord.com/api/v10/users/@me/guilds", nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		log.Printf("Failed to fetch user guilds: %v", err)
+		return "[]"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("Discord guilds request failed: status %d", resp.StatusCode)
+		return "[]"
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "[]"
+	}
+	return string(body)
 }
 
 func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
@@ -82,11 +106,13 @@ func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
 		var discordUser DiscordUser
 		json.NewDecoder(userResp.Body).Decode(&discordUser)
 
+		guildsJSON := fetchUserGuilds(tokenRes.AccessToken)
+
 		var user models.UserProfile
 		err = db.Where(models.UserProfile{UserID: discordUser.ID}).Assign(models.UserProfile{
-			Username:     discordUser.Username,
-			Avatar:       discordUser.Avatar,
-			DiscordToken: tokenRes.AccessToken,
+			Username:   discordUser.Username,
+			Avatar:     discordUser.Avatar,
+			GuildsJSON: guildsJSON,
 		}).FirstOrCreate(&user).Error
 
 		if err != nil {

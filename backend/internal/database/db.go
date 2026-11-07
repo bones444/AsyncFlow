@@ -26,5 +26,12 @@ func InitDB() (*gorm.DB, error) {
 		&models.PollOption{},
 		&models.PollVote{},
 	)
+
+	// Discord OAuth tokens are no longer stored; remove the old column.
+	if db.Migrator().HasColumn(&models.UserProfile{}, "discord_token") {
+		if err := db.Migrator().DropColumn(&models.UserProfile{}, "discord_token"); err != nil {
+			return nil, err
+		}
+	}
 	return db, nil
 }
