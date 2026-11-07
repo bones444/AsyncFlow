@@ -39,6 +39,7 @@ func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			http.Error(w, "Missing authorization code", http.StatusBadRequest)
+			return
 		}
 
 		data := url.Values{}
@@ -49,7 +50,13 @@ func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
 		data.Set("redirect_uri", os.Getenv("DISCORD_REDIRECT_URI"))
 
 		resp, err := http.PostForm("https://discord.com/api/oauth2/token", data)
-		if err != nil || resp.StatusCode != 200 {
+		if err != nil {
+			log.Printf("Discord token request failed: %v", err)
+			http.Error(w, "Failed to exchange token with Discord", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
 			var errRes map[string]interface{}
 			json.NewDecoder(resp.Body).Decode(&errRes)
 			log.Printf("Discord API Error: %v Status: %d", errRes, resp.StatusCode)
@@ -57,7 +64,6 @@ func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
 			http.Error(w, "Failed to exchange token with Discord", http.StatusInternalServerError)
 			return
 		}
-		defer resp.Body.Close()
 
 		var tokenRes DiscordTokenResponse
 		json.NewDecoder(resp.Body).Decode(&tokenRes)
@@ -85,8 +91,8 @@ func HandleDiscordLogin(db *gorm.DB) http.HandlerFunc {
 
 		if err != nil {
 			log.Printf("Failed to save user profile: %v", err)
-            http.Error(w, "Database error", http.StatusInternalServerError)
-            return
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
 		}
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
